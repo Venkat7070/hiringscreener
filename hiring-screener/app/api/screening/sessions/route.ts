@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ensureSchema, pool, sql } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/requireAdmin";
-import { MAX_TEXT_CHARS } from "@/lib/cvText";
+import { MAX_TEXT_CHARS } from "@/lib/textLimits";
 import type { RoleStatus, ScreeningSessionSummary } from "@/lib/types";
 
 export const runtime = "nodejs";

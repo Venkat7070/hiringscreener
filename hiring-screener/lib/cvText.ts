@@ -1,7 +1,6 @@
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
-
-export const MAX_TEXT_CHARS = 8000;
+import { MAX_TEXT_CHARS } from "./textLimits";
 
 export class DocumentTextError extends Error {}
 

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ScreeningSessionSummary } from "@/lib/types";
+import type { ApplicationRecord, ScreeningSessionSummary } from "@/lib/types";
+import { ROLE_LIST } from "@/lib/roles";
 import { runScreeningLoop } from "@/lib/runScreening";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -17,6 +18,7 @@ export function ScreeningHub() {
   const [error, setError] = useState<string | null>(null);
   const [runningRoleId, setRunningRoleId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
+  const [applications, setApplications] = useState<ApplicationRecord[] | null>(null);
 
   async function load() {
     setLoading(true);
@@ -35,6 +37,10 @@ export function ScreeningHub() {
 
   useEffect(() => {
     void load();
+    fetch("/api/applications")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setApplications(data.applications))
+      .catch(() => {});
   }, []);
 
   async function handleRun(sessionId: string, roleId: string) {
@@ -70,14 +76,41 @@ export function ScreeningHub() {
       {loading && <p className="py-10 text-stone-500">Loading sessions…</p>}
       {error && <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</p>}
 
-      {!loading && !error && sessions.length === 0 && (
-        <p className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-stone-400">
-          No screening sessions yet. Create one to upload CVs against a job description.
-        </p>
-      )}
-
-      {!loading && !error && sessions.length > 0 && (
+      {!loading && !error && (
         <div className="flex flex-col gap-4">
+          <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <Link href="/admin" className="text-lg font-medium text-stone-900 hover:underline">
+                FDE Intern, Lead & Manager Screener
+              </Link>
+              {applications && (
+                <span className="text-xs text-stone-400">
+                  {applications.length} candidate{applications.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              {ROLE_LIST.map((role) => (
+                <div
+                  key={role.key}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2"
+                >
+                  <span className="text-sm font-medium text-stone-800">{role.title}</span>
+                  <span className="text-xs text-stone-500">
+                    {applications ? applications.filter((a) => a.role === role.key).length : "…"} applicant
+                    {applications?.filter((a) => a.role === role.key).length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {sessions.length === 0 && (
+            <p className="rounded-xl border border-dashed border-stone-300 px-6 py-10 text-center text-stone-400">
+              No other screening sessions yet. Create one to upload CVs against a job description.
+            </p>
+          )}
+
           {sessions.map((session) => (
             <div key={session.id} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">

@@ -281,7 +281,11 @@ async function processChat(chatId, stats, state) {
           ai_rationale = ${result.rationale}, ai_recommended_stage = ${result.recommendedStage}
       WHERE id = ${existing.id}
     `;
-  } else {
+  } else if (result.role) {
+    // Never persist a brand-new row for a chat the model itself judged isn't a genuine
+    // candidate for any role — that's noise, not a pipeline entry. (An existing row is
+    // still updated above even if it flips to "none" on a rescore, since it's already
+    // a tracked candidate, not fresh noise.)
     const id = randomUUID();
     await sql`
       INSERT INTO applications (
@@ -293,6 +297,8 @@ async function processChat(chatId, stats, state) {
         ${"linkedin-screen:" + chatId}
       )
     `;
+  } else {
+    stats.skippedNotCandidate = (stats.skippedNotCandidate || 0) + 1;
   }
 
   stats.screened++;
@@ -332,7 +338,7 @@ async function main() {
   }
   console.log(`Screening ${chatIds.length} chats with activity on/after ${CUTOFF} (concurrency=${CONCURRENCY})`);
 
-  const stats = { screened: 0, skippedAlreadyScreened: 0, skippedEmpty: 0, failed: 0 };
+  const stats = { screened: 0, skippedAlreadyScreened: 0, skippedEmpty: 0, skippedNotCandidate: 0, failed: 0 };
   const state = { aborted: false, consecutiveRateLimited: 0 };
   let done = 0;
 

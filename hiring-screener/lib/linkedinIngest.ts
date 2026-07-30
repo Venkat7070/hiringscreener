@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
-import { extractDocumentText } from "@/lib/cvText";
 import { extractEmail } from "@/lib/emailExtract";
 
 // Hard rule: never sync anything from before this date, and never sync a chat
@@ -85,6 +84,9 @@ export async function ingestCvAttachment(params: {
 
   let cvText: string | null = null;
   try {
+    // Imported dynamically so a failure here can never take down the whole sync/webhook
+    // request — only the email extraction for this one attachment degrades.
+    const { extractDocumentText } = await import("@/lib/cvText");
     cvText = await extractDocumentText(buffer, `cv.${ext}`);
   } catch {
     // fall back to the accompanying message text below

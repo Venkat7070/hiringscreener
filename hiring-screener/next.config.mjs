@@ -5,7 +5,7 @@ const nextConfig = {
   // available and crashes. Keeping it external forces a plain runtime `require`,
   // which is how it works correctly outside of Next's bundler.
   experimental: {
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
+    serverComponentsExternalPackages: ["pdf-parse", "mammoth", "@napi-rs/canvas"],
   },
 };
 

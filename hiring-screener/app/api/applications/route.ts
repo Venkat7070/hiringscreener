@@ -6,14 +6,19 @@ import { isValidRole, LOCATION_CHOICES } from "@/lib/roles";
 import { ScoringError, scoreAnswers } from "@/lib/scoring";
 import { runBackgroundScoring } from "@/lib/scoreApplication";
 import { isAdminAuthenticated } from "@/lib/requireAdmin";
-import { extractDocumentText } from "@/lib/cvText";
 import { extractEmail } from "@/lib/emailExtract";
 import type { ApplicationSubmission } from "@/lib/types";
 
-/** Best-effort: pulls an email from the CV if one was uploaded, else from the free-text answer. */
+/**
+ * Best-effort: pulls an email from the CV if one was uploaded, else from the free-text
+ * answer. Imports the CV-parsing module dynamically (rather than at the top of this file)
+ * so that GET /api/applications — the main admin listing, hit far more often than this
+ * POST handler — never pays the cost of loading it, and can never be taken down if it fails.
+ */
 async function resolveEmail(cvUrl: string | undefined, freeText: string): Promise<string | null> {
   if (cvUrl) {
     try {
+      const { extractDocumentText } = await import("@/lib/cvText");
       const res = await fetch(cvUrl);
       if (res.ok) {
         const buffer = Buffer.from(await res.arrayBuffer());

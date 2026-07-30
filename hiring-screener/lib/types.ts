@@ -32,6 +32,7 @@ export interface ApplicationRecord {
   id: string;
   role: Role | null;
   name: string;
+  email: string | null;
   linkedin: string | null;
   location_choice: LocationChoice | null;
   answers: AnsweredQuestion[];

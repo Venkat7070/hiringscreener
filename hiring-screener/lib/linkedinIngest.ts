@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
+import { extractDocumentText } from "@/lib/cvText";
+import { extractEmail } from "@/lib/emailExtract";
 
 // Hard rule: never sync anything from before this date, and never sync a chat
 // that has never had a CV attachment (i.e. isn't a candidate conversation).
@@ -81,13 +83,21 @@ export async function ingestCvAttachment(params: {
     contentType,
   });
 
+  let cvText: string | null = null;
+  try {
+    cvText = await extractDocumentText(buffer, `cv.${ext}`);
+  } catch {
+    // fall back to the accompanying message text below
+  }
+  const email = extractEmail(cvText) ?? extractEmail(messageText);
+
   const id = randomUUID();
   const { rowCount } = await sql`
     INSERT INTO applications (
-      id, role, name, linkedin, answers, free_text,
+      id, role, name, email, linkedin, answers, free_text,
       cv_url, cv_filename, mechanical_score, stage, source, external_id
     ) VALUES (
-      ${id}, NULL, ${senderName}, ${senderProfileUrl}, '[]'::jsonb, ${messageText},
+      ${id}, NULL, ${senderName}, ${email}, ${senderProfileUrl}, '[]'::jsonb, ${messageText},
       ${blob.url}, ${`${senderName} - CV.${ext}`}, NULL, 'Applied', 'linkedin', ${externalId}
     )
     ON CONFLICT (external_id) DO NOTHING

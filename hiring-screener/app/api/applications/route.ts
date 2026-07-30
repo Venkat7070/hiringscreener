@@ -6,7 +6,28 @@ import { isValidRole, LOCATION_CHOICES } from "@/lib/roles";
 import { ScoringError, scoreAnswers } from "@/lib/scoring";
 import { runBackgroundScoring } from "@/lib/scoreApplication";
 import { isAdminAuthenticated } from "@/lib/requireAdmin";
+import { extractDocumentText } from "@/lib/cvText";
+import { extractEmail } from "@/lib/emailExtract";
 import type { ApplicationSubmission } from "@/lib/types";
+
+/** Best-effort: pulls an email from the CV if one was uploaded, else from the free-text answer. */
+async function resolveEmail(cvUrl: string | undefined, freeText: string): Promise<string | null> {
+  if (cvUrl) {
+    try {
+      const res = await fetch(cvUrl);
+      if (res.ok) {
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const filename = new URL(cvUrl).pathname.split("/").pop() ?? "";
+        const text = await extractDocumentText(buffer, filename);
+        const email = extractEmail(text);
+        if (email) return email;
+      }
+    } catch {
+      // fall through to the free-text fallback below
+    }
+  }
+  return extractEmail(freeText);
+}
 
 export const runtime = "nodejs";
 
@@ -49,14 +70,15 @@ export async function POST(request: Request) {
   }
 
   const id = randomUUID();
+  const email = await resolveEmail(body.cvUrl, body.freeText.trim());
 
   await ensureSchema();
   await sql`
     INSERT INTO applications (
-      id, role, name, linkedin, location_choice, answers, free_text,
+      id, role, name, email, linkedin, location_choice, answers, free_text,
       cv_url, cv_filename, mechanical_score, stage
     ) VALUES (
-      ${id}, ${body.role}, ${body.name.trim()}, ${body.linkedin ?? null},
+      ${id}, ${body.role}, ${body.name.trim()}, ${email}, ${body.linkedin ?? null},
       ${body.role === "engagement_manager" ? body.locationChoice ?? null : null},
       ${JSON.stringify(scored.answers)}, ${body.freeText.trim()},
       ${body.cvUrl ?? null}, ${body.cvFilename ?? null},

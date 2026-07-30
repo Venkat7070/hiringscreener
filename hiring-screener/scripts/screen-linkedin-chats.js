@@ -56,6 +56,24 @@ function scheduleGroqCall(fn) {
 
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
 
+const EMAIL_REGEX = /[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const GENERIC_LOCAL_PARTS = [
+  "noreply", "no-reply", "donotreply", "do-not-reply", "info", "support",
+  "contact", "admin", "hello", "hr", "careers", "jobs", "recruiting", "recruitment",
+];
+
+/** Mirrors lib/emailExtract.ts — duplicated here since this script runs outside the Next build. */
+function extractEmail(text) {
+  if (!text) return null;
+  const matches = text.match(EMAIL_REGEX);
+  if (!matches || matches.length === 0) return null;
+  const personal = matches.find((m) => {
+    const localPart = m.split("@")[0].toLowerCase();
+    return !GENERIC_LOCAL_PARTS.some((p) => localPart === p || localPart.startsWith(p));
+  });
+  return (personal || matches[0]).toLowerCase();
+}
+
 const FINAL_YEAR_PATTERN =
   /\b(final[\s-]?year|final[\s-]?yr|final[\s-]?semester|7th\s*sem(ester)?|8th\s*sem(ester)?|currently\s+pursuing|pursuing\s+my|pursuing\s+b\.?tech|3rd\s*year|4th\s*year)\b/i;
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -274,11 +292,14 @@ async function processChat(chatId, stats, state) {
     }
   }
 
+  const email = (existing && existing.email) || extractEmail(cvText) || extractEmail(transcript) || null;
+
   if (existing) {
     await sql`
       UPDATE applications
       SET role = ${result.role}, ai_score = ${result.score},
-          ai_rationale = ${result.rationale}, ai_recommended_stage = ${result.recommendedStage}
+          ai_rationale = ${result.rationale}, ai_recommended_stage = ${result.recommendedStage},
+          email = ${email}
       WHERE id = ${existing.id}
     `;
   } else if (result.role) {
@@ -289,10 +310,10 @@ async function processChat(chatId, stats, state) {
     const id = randomUUID();
     await sql`
       INSERT INTO applications (
-        id, role, name, linkedin, answers, free_text, mechanical_score,
+        id, role, name, email, linkedin, answers, free_text, mechanical_score,
         ai_score, ai_rationale, ai_recommended_stage, stage, source, external_id
       ) VALUES (
-        ${id}, ${result.role}, ${contactName}, ${contactProfileUrl}, '[]'::jsonb, ${transcript.slice(0, 4000)},
+        ${id}, ${result.role}, ${contactName}, ${email}, ${contactProfileUrl}, '[]'::jsonb, ${transcript.slice(0, 4000)},
         NULL, ${result.score}, ${result.rationale}, ${result.recommendedStage}, 'Applied', 'linkedin',
         ${"linkedin-screen:" + chatId}
       )

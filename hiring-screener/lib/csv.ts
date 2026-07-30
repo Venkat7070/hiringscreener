@@ -11,6 +11,7 @@ function escapeCsvField(value: string | number | null | undefined): string {
 
 const HEADERS = [
   "name",
+  "email",
   "linkedin",
   "role",
   "location_preference",
@@ -27,6 +28,7 @@ export function applicationsToCsv(applications: ApplicationRecord[]): string {
   const rows = applications.map((app) =>
     [
       app.name,
+      app.email ?? "",
       app.linkedin ?? "",
       app.role ? ROLES[app.role]?.title ?? app.role : "",
       app.location_choice ?? "",

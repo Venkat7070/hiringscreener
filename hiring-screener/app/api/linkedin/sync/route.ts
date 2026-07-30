@@ -133,10 +133,13 @@ export async function POST(request: Request) {
     }
     messagesScanned += messages.length;
 
-    // Hard rule: only sync chats that are actual candidate conversations — i.e. a CV
-    // was attached at some point. Anything else is a personal chat and must be skipped
-    // entirely (never stored), regardless of the date filter below.
-    const chatHasCv = messages.some((m) => (m.attachments ?? []).some(isCvAttachment));
+    // Hard rule: only sync chats that are actual candidate conversations — i.e. the
+    // CONTACT (not the account owner) sent a CV at some point. Attachments the account
+    // owner sent outbound (e.g. sharing their own resume while job-hunting themselves)
+    // never count — otherwise the account owner's own job search pollutes this list.
+    // Anything else is a personal chat and must be skipped entirely, regardless of the
+    // date filter below.
+    const chatHasCv = messages.some((m) => !m.is_sender && (m.attachments ?? []).some(isCvAttachment));
     if (!chatHasCv) {
       continue;
     }
@@ -152,8 +155,8 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const cvAttachments = (message.attachments ?? []).filter(isCvAttachment);
       const isSender = Boolean(message.is_sender);
+      const cvAttachments = isSender ? [] : (message.attachments ?? []).filter(isCvAttachment);
 
       try {
         const { inserted } = await ingestMessage({

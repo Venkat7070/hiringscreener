@@ -4,6 +4,7 @@ import { isAdminAuthenticated } from "@/lib/requireAdmin";
 import {
   ingestCvAttachment,
   ingestMessage,
+  isBeforeSyncCutoff,
   isCvAttachment,
   unipileGet,
   type UnipileAttachment,
@@ -132,7 +133,19 @@ export async function POST(request: Request) {
     }
     messagesScanned += messages.length;
 
+    // Hard rule: only sync chats that are actual candidate conversations — i.e. a CV
+    // was attached at some point. Anything else is a personal chat and must be skipped
+    // entirely (never stored), regardless of the date filter below.
+    const chatHasCv = messages.some((m) => (m.attachments ?? []).some(isCvAttachment));
+    if (!chatHasCv) {
+      continue;
+    }
+
     for (const message of messages) {
+      if (isBeforeSyncCutoff(message.timestamp ?? null)) {
+        continue;
+      }
+
       const messageId = message.message_id ?? message.id ?? message.provider_message_id;
       if (!messageId) {
         console.error(`Skipping message with no resolvable id in chat ${chat.id}:`, message);

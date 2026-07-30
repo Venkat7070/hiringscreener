@@ -2,6 +2,17 @@ import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 
+// Hard rule: never sync anything from before this date, and never sync a chat
+// that has never had a CV attachment (i.e. isn't a candidate conversation).
+// A prior manual DB cleanup was silently undone by re-running /api/linkedin/sync,
+// so this must be enforced at ingestion time, not as a one-off deletion.
+export const LINKEDIN_SYNC_CUTOFF = "2026-07-22T00:00:00.000Z";
+
+export function isBeforeSyncCutoff(timestamp: string | null): boolean {
+  if (!timestamp) return false;
+  return new Date(timestamp).getTime() < new Date(LINKEDIN_SYNC_CUTOFF).getTime();
+}
+
 export const CV_EXTENSIONS: Record<string, string> = {
   "application/pdf": "pdf",
   "application/msword": "doc",
@@ -83,6 +94,14 @@ export async function ingestCvAttachment(params: {
   `;
 
   return { inserted: rowCount === 1 };
+}
+
+/** True if this chat already has a stored message with a CV attachment (i.e. is a known candidate chat). */
+export async function chatHasStoredCv(chatId: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT 1 FROM linkedin_messages WHERE chat_id = ${chatId} AND has_cv_attachment = true LIMIT 1
+  `;
+  return rows.length > 0;
 }
 
 /** Stores any inbound/outbound chat message (with or without a CV attachment). Idempotent via message_id. */

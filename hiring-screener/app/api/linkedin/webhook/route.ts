@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { ensureSchema } from "@/lib/db";
 import {
+  chatHasStoredCv,
   ingestCvAttachment,
   ingestMessage,
+  isBeforeSyncCutoff,
   isCvAttachment,
   type UnipileAttachment,
 } from "@/lib/linkedinIngest";
@@ -44,6 +46,12 @@ export async function POST(request: Request) {
 
   await ensureSchema();
 
+  // Hard rule: never sync anything before the cutoff, and never sync a chat that
+  // isn't (yet) a known candidate conversation — see lib/linkedinIngest.ts.
+  if (isBeforeSyncCutoff(payload.timestamp ?? null)) {
+    return NextResponse.json({ ok: true, skipped: "before sync cutoff date" });
+  }
+
   const senderName = payload.sender?.attendee_name?.trim() || "Unknown LinkedIn contact";
   const senderProfileUrl = payload.sender?.attendee_profile_url ?? null;
   const messageText = payload.message ?? null;
@@ -52,6 +60,10 @@ export async function POST(request: Request) {
   // account owner sends out (e.g. sharing their own resume in an unrelated chat)
   // must never be ingested as an application.
   const cvAttachments = isSender ? [] : (payload.attachments ?? []).filter(isCvAttachment);
+
+  if (cvAttachments.length === 0 && !(await chatHasStoredCv(chatId))) {
+    return NextResponse.json({ ok: true, skipped: "not a known candidate chat" });
+  }
 
   try {
     await ingestMessage({

@@ -6,9 +6,15 @@ import { STAGES, type Stage } from "@/lib/types";
 export function BulkActionBar({
   selectedCount,
   onApply,
+  onRescore,
+  rescoring,
+  rescoreProgress,
 }: {
   selectedCount: number;
   onApply: (stage: Stage) => Promise<void>;
+  onRescore: () => Promise<void>;
+  rescoring: boolean;
+  rescoreProgress: string | null;
 }) {
   const [stage, setStage] = useState<Stage>("Screened");
   const [applying, setApplying] = useState(false);
@@ -16,7 +22,7 @@ export function BulkActionBar({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-md border border-amber bg-amber/10 px-4 py-3">
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-amber bg-amber/10 px-4 py-3">
       <span className="text-sm font-medium text-stone-800">{selectedCount} selected</span>
       <select
         value={stage}
@@ -40,6 +46,15 @@ export function BulkActionBar({
       >
         {applying ? "Applying..." : "Apply to selected"}
       </button>
+      <span className="h-5 w-px bg-amber-dark/40" />
+      <button
+        onClick={onRescore}
+        disabled={rescoring}
+        className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
+      >
+        {rescoring ? "Rescoring…" : "Rescore selected with AI"}
+      </button>
+      {rescoreProgress && <span className="text-xs text-stone-600">{rescoreProgress}</span>}
     </div>
   );
 }

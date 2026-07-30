@@ -29,6 +29,8 @@ export function AdminDashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [rescoring, setRescoring] = useState(false);
+  const [rescoreProgress, setRescoreProgress] = useState<string | null>(null);
 
   useEffect(() => {
     void loadApplications();
@@ -147,6 +149,10 @@ export function AdminDashboard() {
     );
   }
 
+  function selectUnscored() {
+    setSelectedIds(new Set(filteredSorted.filter((a) => a.ai_score === null && a.role).map((a) => a.id)));
+  }
+
   async function applyBulkStage(stage: Stage) {
     await fetch("/api/applications/bulk-stage", {
       method: "POST",
@@ -156,6 +162,48 @@ export function AdminDashboard() {
     setApplications((prev) =>
       prev.map((a) => (selectedIds.has(a.id) ? { ...a, stage } : a))
     );
+    setSelectedIds(new Set());
+  }
+
+  async function runBulkRescore() {
+    const targets = applications.filter((a) => selectedIds.has(a.id) && a.role);
+    const skipped = selectedIds.size - targets.length;
+    if (targets.length === 0) return;
+
+    setRescoring(true);
+    let done = 0;
+    let failed = 0;
+    setRescoreProgress(`0/${targets.length} rescored…`);
+
+    const CONCURRENCY = 4;
+    let index = 0;
+    async function next(): Promise<void> {
+      while (index < targets.length) {
+        const application = targets[index++];
+        try {
+          const res = await fetch(`/api/applications/${application.id}/rescore`, { method: "POST" });
+          const data = await res.json();
+          if (res.ok) {
+            setApplications((prev) => prev.map((a) => (a.id === application.id ? data.application : a)));
+          } else {
+            failed++;
+          }
+        } catch {
+          failed++;
+        } finally {
+          done++;
+          setRescoreProgress(`${done}/${targets.length} rescored…`);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, next));
+
+    setRescoreProgress(
+      `Rescored ${done - failed}/${targets.length}${failed ? `, ${failed} failed` : ""}${
+        skipped ? ` (${skipped} skipped — no role assigned)` : ""
+      }.`
+    );
+    setRescoring(false);
     setSelectedIds(new Set());
   }
 
@@ -231,9 +279,27 @@ export function AdminDashboard() {
             {filteredSorted.length} match{filteredSorted.length === 1 ? "" : "es"}
           </span>
         )}
+        <button
+          onClick={toggleSelectAll}
+          className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-100"
+        >
+          {selectedIds.size === filteredSorted.length && filteredSorted.length > 0 ? "Deselect all" : "Select all"}
+        </button>
+        <button
+          onClick={selectUnscored}
+          className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-100"
+        >
+          Select unscored
+        </button>
       </div>
 
-      <BulkActionBar selectedCount={selectedIds.size} onApply={applyBulkStage} />
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onApply={applyBulkStage}
+        onRescore={runBulkRescore}
+        rescoring={rescoring}
+        rescoreProgress={rescoreProgress}
+      />
 
       {loading && (
         <div className="flex items-center gap-2 py-10 text-stone-500">

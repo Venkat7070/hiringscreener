@@ -106,6 +106,7 @@ export function ScreeningHub() {
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
   const [applications, setApplications] = useState<ApplicationRecord[] | null>(null);
   const [dashboard, setDashboard] = useState<ScreeningDashboard | null>(null);
+  const [rescopeByRole, setRescopeByRole] = useState<Record<string, "new" | "all">>({});
 
   async function load() {
     setLoading(true);
@@ -139,23 +140,29 @@ export function ScreeningHub() {
   }, []);
 
   async function handleRun(sessionId: string, roleId: string) {
+    const scope = rescopeByRole[roleId] ?? "new";
     setRunningRoleId(roleId);
-    await runScreeningLoop(sessionId, roleId, (update) => {
-      if (update.error) {
-        setRunStatus((prev) => ({ ...prev, [roleId]: update.error! }));
-        return;
-      }
-      setRunStatus((prev) => ({
-        ...prev,
-        [roleId]: `${update.scored + update.failed}/${update.totalCandidates} processed${
-          update.rateLimited ? " — stopped early, click Run again" : ""
-        }`,
-      }));
-      if (update.done) {
-        void load();
-        loadDashboard();
-      }
-    });
+    await runScreeningLoop(
+      sessionId,
+      roleId,
+      (update) => {
+        if (update.error) {
+          setRunStatus((prev) => ({ ...prev, [roleId]: update.error! }));
+          return;
+        }
+        setRunStatus((prev) => ({
+          ...prev,
+          [roleId]: `${update.scored + update.failed}/${update.totalCandidates} processed${
+            update.rateLimited ? " — stopped early, click Run again" : ""
+          }`,
+        }));
+        if (update.done) {
+          void load();
+          loadDashboard();
+        }
+      },
+      { force: scope === "all" }
+    );
     setRunningRoleId(null);
   }
 
@@ -244,12 +251,36 @@ export function ScreeningHub() {
                       {runStatus[role.id] && (
                         <span className="text-xs text-stone-500">{runStatus[role.id]}</span>
                       )}
+                      <div className="flex overflow-hidden rounded-md border border-stone-300 text-xs">
+                        <button
+                          onClick={() => setRescopeByRole((prev) => ({ ...prev, [role.id]: "new" }))}
+                          className={`px-2 py-1 font-medium transition ${
+                            (rescopeByRole[role.id] ?? "new") === "new"
+                              ? "bg-stone-200 text-stone-900"
+                              : "bg-white text-stone-500 hover:bg-stone-50"
+                          }`}
+                        >
+                          New only
+                        </button>
+                        <button
+                          onClick={() => setRescopeByRole((prev) => ({ ...prev, [role.id]: "all" }))}
+                          className={`border-l border-stone-300 px-2 py-1 font-medium transition ${
+                            rescopeByRole[role.id] === "all"
+                              ? "bg-stone-200 text-stone-900"
+                              : "bg-white text-stone-500 hover:bg-stone-50"
+                          }`}
+                        >
+                          All
+                        </button>
+                      </div>
                       <button
                         onClick={() => handleRun(session.id, role.id)}
                         disabled={runningRoleId === role.id || session.candidateCount === 0}
                         className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
                       >
-                        {runningRoleId === role.id ? "Running…" : "Run screening"}
+                        {runningRoleId === role.id
+                          ? "Running…"
+                          : `Rescore ${(rescopeByRole[role.id] ?? "new") === "all" ? "all" : "new"}`}
                       </button>
                     </div>
                   </div>

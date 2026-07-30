@@ -144,6 +144,9 @@ export function ensureSchema(): Promise<void> {
           ON screening_results(candidate_id)
         `
       )
+      .then(
+        () => sql`ALTER TABLE screening_results ADD COLUMN IF NOT EXISTS recruiter_comment TEXT`
+      )
       .then(() => undefined);
   }
   return schemaReady;

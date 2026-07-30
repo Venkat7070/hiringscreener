@@ -2,9 +2,95 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ApplicationRecord, ScreeningSessionSummary } from "@/lib/types";
+import type { ApplicationRecord, ScreeningDashboard, ScreeningSessionSummary } from "@/lib/types";
 import { ROLE_LIST } from "@/lib/roles";
 import { runScreeningLoop } from "@/lib/runScreening";
+import { ScoreBadge } from "@/components/shared/ScoreBadge";
+
+const STAGE_BAR_COLOR = "bg-amber";
+
+function DashboardPanel({ dashboard }: { dashboard: ScreeningDashboard }) {
+  const { totals, stageFunnel, roleBreakdown } = dashboard;
+  const maxStageCount = Math.max(1, ...stageFunnel.map((s) => s.count));
+  const maxRoleCount = Math.max(1, ...roleBreakdown.map((r) => r.candidateCount));
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Overview</h2>
+
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-stone-100 bg-stone-50 px-4 py-3">
+          <div className="text-2xl font-semibold text-stone-950">{totals.totalCandidates}</div>
+          <div className="text-xs text-stone-500">Total candidates</div>
+        </div>
+        <div className="rounded-lg border border-stone-100 bg-stone-50 px-4 py-3">
+          <div className="text-2xl font-semibold text-stone-950">
+            {totals.totalScored}
+            <span className="text-sm font-normal text-stone-400"> / {totals.totalCandidates}</span>
+          </div>
+          <div className="text-xs text-stone-500">Scored</div>
+        </div>
+        <div className="rounded-lg border border-stone-100 bg-stone-50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <ScoreBadge score={totals.avgScore !== null ? Math.round(totals.avgScore) : null} />
+          </div>
+          <div className="mt-1 text-xs text-stone-500">Average AI score</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+            Pipeline by stage
+          </h3>
+          <div className="flex flex-col gap-2">
+            {stageFunnel.map(({ stage, count }) => (
+              <div key={stage} className="flex items-center gap-2 text-xs">
+                <span className="w-24 shrink-0 text-stone-600">{stage}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-100">
+                  <div
+                    className={`h-full rounded-full ${STAGE_BAR_COLOR}`}
+                    style={{ width: `${(count / maxStageCount) * 100}%` }}
+                  />
+                </div>
+                <span className="w-6 shrink-0 text-right font-medium text-stone-700">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+            Candidates &amp; avg score by role
+          </h3>
+          {roleBreakdown.length === 0 ? (
+            <p className="text-xs text-stone-400">No roles yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {roleBreakdown.map((role) => (
+                <div key={role.title} className="flex items-center gap-2 text-xs">
+                  <span className="w-32 shrink-0 truncate text-stone-600" title={role.title}>
+                    {role.title}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-100">
+                    <div
+                      className={`h-full rounded-full ${STAGE_BAR_COLOR}`}
+                      style={{ width: `${(role.candidateCount / maxRoleCount) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-6 shrink-0 text-right font-medium text-stone-700">
+                    {role.candidateCount}
+                  </span>
+                  <ScoreBadge score={role.avgScore !== null ? Math.round(role.avgScore) : null} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "border-stone-300 bg-stone-50 text-stone-600",
@@ -19,6 +105,7 @@ export function ScreeningHub() {
   const [runningRoleId, setRunningRoleId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
   const [applications, setApplications] = useState<ApplicationRecord[] | null>(null);
+  const [dashboard, setDashboard] = useState<ScreeningDashboard | null>(null);
 
   async function load() {
     setLoading(true);
@@ -35,8 +122,16 @@ export function ScreeningHub() {
     }
   }
 
+  function loadDashboard() {
+    fetch("/api/screening/dashboard")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setDashboard(data))
+      .catch(() => {});
+  }
+
   useEffect(() => {
     void load();
+    loadDashboard();
     fetch("/api/applications")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data && setApplications(data.applications))
@@ -56,7 +151,10 @@ export function ScreeningHub() {
           update.rateLimited ? " — stopped early, click Run again" : ""
         }`,
       }));
-      if (update.done) void load();
+      if (update.done) {
+        void load();
+        loadDashboard();
+      }
     });
     setRunningRoleId(null);
   }
@@ -78,6 +176,8 @@ export function ScreeningHub() {
 
       {!loading && !error && (
         <div className="flex flex-col gap-4">
+          {dashboard && <DashboardPanel dashboard={dashboard} />}
+
           <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <Link href="/admin" className="text-lg font-medium text-stone-900 hover:underline">

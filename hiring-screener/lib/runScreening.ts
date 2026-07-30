@@ -12,10 +12,18 @@ export interface RunScreeningUpdate {
  * handleSyncLinkedIn's offset-loop in AdminDashboard.tsx. Calls onUpdate after every
  * batch so the caller can render live progress.
  */
+export interface RunScreeningOptions {
+  /** Rescore even candidates that already have a score. */
+  force?: boolean;
+  /** Restrict the run to these candidate IDs instead of the whole session. */
+  candidateIds?: string[];
+}
+
 export async function runScreeningLoop(
   sessionId: string,
   roleId: string,
-  onUpdate: (update: RunScreeningUpdate) => void
+  onUpdate: (update: RunScreeningUpdate) => void,
+  options: RunScreeningOptions = {}
 ): Promise<void> {
   let offset = 0;
   let scored = 0;
@@ -26,7 +34,11 @@ export async function runScreeningLoop(
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const res = await fetch(
         `/api/screening/sessions/${sessionId}/roles/${roleId}/run?offset=${offset}`,
-        { method: "POST" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: options.force, candidateIds: options.candidateIds }),
+        }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Run failed");

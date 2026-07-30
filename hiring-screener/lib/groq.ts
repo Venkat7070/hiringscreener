@@ -116,7 +116,7 @@ export interface JdScoringResult extends GroqScoringResult {
   candidateName: string | null;
 }
 
-function buildJdPrompt(jdText: string, cvText: string): string {
+function buildJdPrompt(jdText: string, cvText: string, recruiterNote?: string | null): string {
   return `You are screening a candidate's CV against a job description.
 
 JOB DESCRIPTION:
@@ -128,7 +128,11 @@ CANDIDATE'S CV/RESUME TEXT:
 """
 ${cvText}
 """
-
+${
+  recruiterNote?.trim()
+    ? `\nRECRUITER'S NOTE ON THIS CANDIDATE (weigh this heavily — it's first-hand context the recruiter wants factored into the score):\n"""\n${recruiterNote.trim()}\n"""\n`
+    : ""
+}
 Judge the candidate holistically based on genuine fit against the job description — skills, experience, seniority, and specificity of accomplishments. Also extract the candidate's full name as it appears on the CV, if identifiable.
 
 If the candidate indicates they are still currently completing their final year of study rather than already graduated — phrases like "final year", "final-year", "7th semester", "8th sem", "currently pursuing", "final semester", "3rd/4th year", or similar — subtract 15 points from the score you would otherwise give, since they're less immediately available than a graduate. Regardless of how high the resulting score is, never recommend "Shortlist" as the stage for a candidate who is still studying rather than graduated — cap it at "Borderline" at most. Reflect this in your rationale when it applies.
@@ -178,14 +182,18 @@ function parseJdResponse(raw: string): JdScoringResult {
   };
 }
 
-export async function scoreCandidateAgainstJd(jdText: string, cvText: string): Promise<JdScoringResult> {
+export async function scoreCandidateAgainstJd(
+  jdText: string,
+  cvText: string,
+  recruiterNote?: string | null
+): Promise<JdScoringResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new GroqScoringError("GROQ_API_KEY env var is not set");
   }
 
   const groq = new Groq({ apiKey });
-  const prompt = buildJdPrompt(jdText, cvText);
+  const prompt = buildJdPrompt(jdText, cvText, recruiterNote);
 
   let response;
   try {

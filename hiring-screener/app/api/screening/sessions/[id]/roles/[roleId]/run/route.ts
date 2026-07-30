@@ -26,6 +26,12 @@ export async function POST(
   }
 
   const offset = Math.max(0, Number(new URL(request.url).searchParams.get("offset") ?? "0") || 0);
+  const body = await request.json().catch(() => null);
+  const force: boolean = body?.force === true;
+  const candidateIds: string[] | undefined =
+    Array.isArray(body?.candidateIds) && body.candidateIds.every((v: unknown) => typeof v === "string")
+      ? body.candidateIds
+      : undefined;
 
   await ensureSchema();
 
@@ -37,9 +43,12 @@ export async function POST(
     return NextResponse.json({ error: "Role not found" }, { status: 404 });
   }
 
-  const { rows: candidates } = await sql<ScreeningCandidate>`
+  const { rows: allCandidates } = await sql<ScreeningCandidate>`
     SELECT * FROM screening_candidates WHERE session_id = ${params.id} ORDER BY created_at ASC
   `;
+  const candidates = candidateIds
+    ? allCandidates.filter((c) => candidateIds.includes(c.id))
+    : allCandidates;
   const { rows: existingResults } = await sql<ScreeningResult>`
     SELECT * FROM screening_results WHERE role_id = ${params.roleId}
   `;
@@ -57,7 +66,7 @@ export async function POST(
 
   for (const candidate of batch) {
     const existing = resultByCandidateId.get(candidate.id);
-    if (existing && existing.ai_score !== null) {
+    if (!force && existing && existing.ai_score !== null) {
       continue; // already scored successfully
     }
 
@@ -75,7 +84,7 @@ export async function POST(
     let lastError: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        result = await scoreCandidateAgainstJd(role.jd_text, candidate.cv_text);
+        result = await scoreCandidateAgainstJd(role.jd_text, candidate.cv_text, existing?.recruiter_comment);
         break;
       } catch (error) {
         lastError = error;

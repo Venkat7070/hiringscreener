@@ -20,6 +20,9 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   const [runningRoleId, setRunningRoleId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
   const [busyCandidateId, setBusyCandidateId] = useState<string | null>(null);
+  const [rescopeByRole, setRescopeByRole] = useState<Record<string, "new" | "all">>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [rescoringCandidateId, setRescoringCandidateId] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -41,21 +44,67 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   async function handleRun(roleId: string) {
+    const scope = rescopeByRole[roleId] ?? "new";
     setRunningRoleId(roleId);
-    await runScreeningLoop(sessionId, roleId, (update) => {
-      if (update.error) {
-        setRunStatus((prev) => ({ ...prev, [roleId]: update.error! }));
-        return;
-      }
-      setRunStatus((prev) => ({
-        ...prev,
-        [roleId]: `${update.scored + update.failed}/${update.totalCandidates} processed${
-          update.rateLimited ? " — stopped early, click Run again" : ""
-        }`,
-      }));
-      if (update.done) void load();
-    });
+    await runScreeningLoop(
+      sessionId,
+      roleId,
+      (update) => {
+        if (update.error) {
+          setRunStatus((prev) => ({ ...prev, [roleId]: update.error! }));
+          return;
+        }
+        setRunStatus((prev) => ({
+          ...prev,
+          [roleId]: `${update.scored + update.failed}/${update.totalCandidates} processed${
+            update.rateLimited ? " — stopped early, click Run again" : ""
+          }`,
+        }));
+        if (update.done) void load();
+      },
+      { force: scope === "all" }
+    );
     setRunningRoleId(null);
+  }
+
+  async function handleSaveComment(candidateId: string, roleId: string, comment: string) {
+    const res = await fetch(
+      `/api/screening/sessions/${sessionId}/roles/${roleId}/candidates/${candidateId}/comment`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment }),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              results: prev.results.some((r) => r.candidate_id === candidateId && r.role_id === roleId)
+                ? prev.results.map((r) =>
+                    r.candidate_id === candidateId && r.role_id === roleId ? (data.result as ScreeningResult) : r
+                  )
+                : [...prev.results, data.result as ScreeningResult],
+            }
+          : prev
+      );
+    }
+  }
+
+  async function handleRowRescore(candidateId: string, roleId: string) {
+    const comment = commentDrafts[`${roleId}:${candidateId}`];
+    setRescoringCandidateId(candidateId);
+    try {
+      if (comment !== undefined) {
+        await handleSaveComment(candidateId, roleId, comment);
+      }
+      await runScreeningLoop(sessionId, roleId, () => {}, { force: true, candidateIds: [candidateId] });
+      await load();
+    } finally {
+      setRescoringCandidateId(null);
+    }
   }
 
   async function handleDeleteCandidate(candidateId: string, name: string) {
@@ -128,12 +177,36 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                 </div>
                 <div className="flex items-center gap-2">
                   {runStatus[role.id] && <span className="text-xs text-stone-500">{runStatus[role.id]}</span>}
+                  <div className="flex overflow-hidden rounded-md border border-stone-300 text-xs">
+                    <button
+                      onClick={() => setRescopeByRole((prev) => ({ ...prev, [role.id]: "new" }))}
+                      className={`px-2 py-1.5 font-medium transition ${
+                        (rescopeByRole[role.id] ?? "new") === "new"
+                          ? "bg-stone-200 text-stone-900"
+                          : "bg-white text-stone-500 hover:bg-stone-50"
+                      }`}
+                    >
+                      New only
+                    </button>
+                    <button
+                      onClick={() => setRescopeByRole((prev) => ({ ...prev, [role.id]: "all" }))}
+                      className={`border-l border-stone-300 px-2 py-1.5 font-medium transition ${
+                        rescopeByRole[role.id] === "all"
+                          ? "bg-stone-200 text-stone-900"
+                          : "bg-white text-stone-500 hover:bg-stone-50"
+                      }`}
+                    >
+                      All
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleRun(role.id)}
                     disabled={runningRoleId === role.id || session.candidates.length === 0}
                     className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
                   >
-                    {runningRoleId === role.id ? "Running…" : "Run screening"}
+                    {runningRoleId === role.id
+                      ? "Running…"
+                      : `Rescore ${(rescopeByRole[role.id] ?? "new") === "all" ? "all" : "new"}`}
                   </button>
                 </div>
               </div>
@@ -152,6 +225,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                         <th className="px-4 py-2">Rationale</th>
                         <th className="px-4 py-2">Stage</th>
                         <th className="px-4 py-2">Tags</th>
+                        <th className="px-4 py-2">Comments</th>
                         <th className="px-4 py-2"></th>
                       </tr>
                     </thead>
@@ -197,6 +271,36 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                             ) : (
                               <span className="text-stone-300">—</span>
                             )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex flex-col gap-1.5">
+                              <textarea
+                                value={
+                                  commentDrafts[`${role.id}:${candidate.id}`] ?? result?.recruiter_comment ?? ""
+                                }
+                                onChange={(e) =>
+                                  setCommentDrafts((prev) => ({
+                                    ...prev,
+                                    [`${role.id}:${candidate.id}`]: e.target.value,
+                                  }))
+                                }
+                                onBlur={(e) => {
+                                  if (e.target.value !== (result?.recruiter_comment ?? "")) {
+                                    void handleSaveComment(candidate.id, role.id, e.target.value);
+                                  }
+                                }}
+                                rows={2}
+                                placeholder="Add a note…"
+                                className="w-40 resize-y rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
+                              />
+                              <button
+                                onClick={() => handleRowRescore(candidate.id, role.id)}
+                                disabled={rescoringCandidateId === candidate.id || !candidate.cv_text}
+                                className="self-start rounded-md border border-sky-300 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
+                              >
+                                {rescoringCandidateId === candidate.id ? "Scoring…" : "Rescore"}
+                              </button>
+                            </div>
                           </td>
                           <td className="px-4 py-2.5">
                             <button

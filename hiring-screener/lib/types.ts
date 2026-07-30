@@ -116,6 +116,7 @@ export interface ScreeningResult {
   ai_recommended_stage: RecommendedStage | null;
   stage: Stage;
   tags: string[];
+  recruiter_comment: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -137,4 +138,19 @@ export interface ScreeningSessionDetail extends ScreeningSession {
   roles: ScreeningRoleWithStatus[];
   candidates: ScreeningCandidate[];
   results: ScreeningResult[];
+}
+
+export interface ScreeningDashboard {
+  totals: {
+    totalCandidates: number;
+    totalScored: number;
+    avgScore: number | null;
+  };
+  stageFunnel: { stage: Stage; count: number }[];
+  roleBreakdown: {
+    title: string;
+    candidateCount: number;
+    scoredCount: number;
+    avgScore: number | null;
+  }[];
 }

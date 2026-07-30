@@ -11,7 +11,7 @@ export default function ScreeningHubPage() {
   return (
     <div className="flex">
       <AdminSidebar />
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <ScreeningHub />
       </div>
     </div>

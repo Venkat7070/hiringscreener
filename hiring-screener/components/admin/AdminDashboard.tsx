@@ -150,7 +150,10 @@ export function AdminDashboard() {
   }
 
   function selectUnscored() {
-    setSelectedIds(new Set(filteredSorted.filter((a) => a.ai_score === null && a.role).map((a) => a.id)));
+    // Include role-less applications here too (e.g. LinkedIn CV ingests awaiting triage) —
+    // runBulkRescore already skips and reports on ones without a role, rather than this
+    // silently selecting nothing when every unscored row happens to lack a role.
+    setSelectedIds(new Set(filteredSorted.filter((a) => a.ai_score === null).map((a) => a.id)));
   }
 
   async function applyBulkStage(stage: Stage) {

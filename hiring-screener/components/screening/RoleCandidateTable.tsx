@@ -42,6 +42,16 @@ export function RoleCandidateTable({
   const [bulkStage, setBulkStage] = useState<Stage>("Screened");
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkRemoving, setBulkRemoving] = useState(false);
+  const [expandedRationale, setExpandedRationale] = useState<Set<string>>(new Set());
+
+  function toggleRationale(candidateId: string) {
+    setExpandedRationale((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
+  }
 
   const allRows = useMemo(
     () =>
@@ -355,9 +365,23 @@ export function RoleCandidateTable({
                       </td>
                       <td className="px-4 py-2.5 text-stone-700">{result?.ai_recommended_stage ?? "—"}</td>
                       <td className="max-w-xs px-4 py-2.5 text-stone-500">
-                        <span className="line-clamp-2" title={result?.ai_rationale ?? undefined}>
-                          {result?.ai_rationale ?? "Not yet screened"}
-                        </span>
+                        {result?.ai_rationale ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleRationale(candidate.id)}
+                            className="block text-left hover:text-stone-800"
+                            title={expandedRationale.has(candidate.id) ? "Click to collapse" : "Click to expand"}
+                          >
+                            <span className={expandedRationale.has(candidate.id) ? "whitespace-pre-wrap" : "line-clamp-2"}>
+                              {result.ai_rationale}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] font-medium text-sky-700">
+                              {expandedRationale.has(candidate.id) ? "Show less" : "Show more"}
+                            </span>
+                          </button>
+                        ) : (
+                          <span>Not yet screened</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         {result ? (

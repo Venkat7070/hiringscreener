@@ -7,6 +7,7 @@ import { ROLE_LIST } from "@/lib/roles";
 import { type Filters } from "./FilterBar";
 import { BulkActionBar } from "./BulkActionBar";
 import { ApplicationRow } from "./ApplicationRow";
+import { runClassifyLoop } from "@/lib/classifyUnassigned";
 
 type SortField = "mechanical_score" | "ai_score";
 
@@ -31,6 +32,8 @@ export function AdminDashboard() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [rescoring, setRescoring] = useState(false);
   const [rescoreProgress, setRescoreProgress] = useState<string | null>(null);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyProgress, setClassifyProgress] = useState<string | null>(null);
 
   useEffect(() => {
     void loadApplications();
@@ -217,6 +220,33 @@ export function AdminDashboard() {
     setSelectedIds(new Set());
   }
 
+  async function runBulkClassify() {
+    const targetIds = applications.filter((a) => selectedIds.has(a.id) && !a.role).map((a) => a.id);
+    const skippedHasRole = selectedIds.size - targetIds.length;
+    if (targetIds.length === 0) {
+      setClassifyProgress(
+        skippedHasRole > 0
+          ? `Nothing to classify — all ${skippedHasRole} selected application${skippedHasRole === 1 ? "" : "s"} already have a role.`
+          : "Nothing selected."
+      );
+      return;
+    }
+
+    setClassifying(true);
+    await runClassifyLoop(targetIds, (update) => {
+      if (update.error) {
+        setClassifyProgress(update.error);
+        return;
+      }
+      setClassifyProgress(
+        `${update.classified + update.classifiedNone + update.skipped + update.failed}/${update.totalCandidates} reviewed — ${update.classified} assigned a role, ${update.classifiedNone} not a fit for any role${update.failed ? `, ${update.failed} failed` : ""}.`
+      );
+      if (update.done) void loadApplications();
+    });
+    setClassifying(false);
+    setSelectedIds(new Set());
+  }
+
   function handleUpdated(updated: ApplicationRecord) {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
@@ -309,6 +339,9 @@ export function AdminDashboard() {
         onRescore={runBulkRescore}
         rescoring={rescoring}
         rescoreProgress={rescoreProgress}
+        onClassify={runBulkClassify}
+        classifying={classifying}
+        classifyProgress={classifyProgress}
       />
 
       {loading && (

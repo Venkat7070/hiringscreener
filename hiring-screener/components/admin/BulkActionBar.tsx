@@ -9,12 +9,18 @@ export function BulkActionBar({
   onRescore,
   rescoring,
   rescoreProgress,
+  onClassify,
+  classifying,
+  classifyProgress,
 }: {
   selectedCount: number;
   onApply: (stage: Stage) => Promise<void>;
   onRescore: () => Promise<void>;
   rescoring: boolean;
   rescoreProgress: string | null;
+  onClassify: () => Promise<void>;
+  classifying: boolean;
+  classifyProgress: string | null;
 }) {
   const [stage, setStage] = useState<Stage>("Screened");
   const [applying, setApplying] = useState(false);
@@ -55,6 +61,16 @@ export function BulkActionBar({
         {rescoring ? "Rescoring…" : "Rescore selected with AI"}
       </button>
       {rescoreProgress && <span className="text-xs text-stone-600">{rescoreProgress}</span>}
+      <span className="h-5 w-px bg-amber-dark/40" />
+      <button
+        onClick={onClassify}
+        disabled={classifying}
+        title="Reads each selected CV/application (that has no role yet) and picks the best-fit role"
+        className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 transition hover:bg-violet-100 disabled:opacity-50"
+      >
+        {classifying ? "Classifying…" : "Assign role from CV (AI)"}
+      </button>
+      {classifyProgress && <span className="text-xs text-stone-600">{classifyProgress}</span>}
     </div>
   );
 }

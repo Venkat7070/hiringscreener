@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { runWithConcurrency } from "@/lib/concurrency";
+import { uploadFile } from "@/lib/uploadFile";
 
 interface RoleDraft {
   key: string;
@@ -23,30 +25,6 @@ function newRole(): RoleDraft {
     resolving: false,
     error: null,
   };
-}
-
-async function uploadFile(file: File): Promise<{ url: string; filename: string }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch("/api/upload", { method: "POST", body: formData });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Upload failed");
-  return { url: data.url, filename: data.filename };
-}
-
-async function runWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  worker: (item: T, index: number) => Promise<void>
-): Promise<void> {
-  let index = 0;
-  async function next(): Promise<void> {
-    while (index < items.length) {
-      const i = index++;
-      await worker(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
 }
 
 export function UploadSessionForm() {

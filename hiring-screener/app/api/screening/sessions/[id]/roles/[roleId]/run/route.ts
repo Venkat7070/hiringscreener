@@ -10,8 +10,11 @@ export const maxDuration = 60;
 
 // One Groq call per candidate, heavier than a LinkedIn chat sync round — keep the batch
 // small and let the caller repeat the call with an increasing offset until `truncated`
-// is false, same pattern as /api/linkedin/sync.
-const BATCH_SIZE = 8;
+// is false, same pattern as /api/linkedin/sync. 8 was too optimistic once candidates have
+// full CV text (up to 8000 chars) rather than short MCQ answers — real-world batches were
+// hitting the 60s function timeout, which returns a plain-text platform error page instead
+// of JSON and breaks the client's res.json() call.
+const BATCH_SIZE = 3;
 const MAX_ATTEMPTS = 2;
 const RATE_LIMIT_BREAKER = 3;
 

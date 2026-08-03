@@ -40,7 +40,19 @@ export async function runScreeningLoop(
           body: JSON.stringify({ force: options.force, candidateIds: options.candidateIds }),
         }
       );
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        // A platform-level failure (e.g. the function hit its execution time limit)
+        // returns a plain-text error page instead of JSON — surface a clear message
+        // rather than the raw JSON-parse error.
+        throw new Error(
+          res.status === 504 || !res.ok
+            ? "Request timed out or failed — try again with a smaller batch, or click Rescore again to resume."
+            : "Run failed"
+        );
+      }
       if (!res.ok) throw new Error(data.error ?? "Run failed");
 
       scored += data.scored;

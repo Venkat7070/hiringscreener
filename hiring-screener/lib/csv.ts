@@ -1,4 +1,4 @@
-import type { ApplicationRecord } from "./types";
+import type { ApplicationRecord, ScreeningCandidate, ScreeningResult } from "./types";
 import { ROLES } from "./roles";
 
 function escapeCsvField(value: string | number | null | undefined): string {
@@ -45,4 +45,36 @@ export function applicationsToCsv(applications: ApplicationRecord[]): string {
   );
 
   return [HEADERS.join(","), ...rows].join("\n");
+}
+
+const SCREENING_HEADERS = [
+  "name",
+  "cv_filename",
+  "ai_score",
+  "ai_recommended_stage",
+  "ai_rationale",
+  "stage",
+  "tags",
+  "recruiter_comment",
+];
+
+export function screeningResultsToCsv(
+  rows: { candidate: ScreeningCandidate; result: ScreeningResult | null }[]
+): string {
+  const csvRows = rows.map(({ candidate, result }) =>
+    [
+      candidate.name,
+      candidate.cv_filename,
+      result?.ai_score ?? "",
+      result?.ai_recommended_stage ?? "",
+      result?.ai_rationale ?? "",
+      result?.stage ?? "",
+      result?.tags.join("; ") ?? "",
+      result?.recruiter_comment ?? "",
+    ]
+      .map(escapeCsvField)
+      .join(",")
+  );
+
+  return [SCREENING_HEADERS.join(","), ...csvRows].join("\n");
 }

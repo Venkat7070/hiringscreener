@@ -230,6 +230,12 @@ export function RoleCandidateTable({
           >
             {running ? "Running…" : `Rescore ${rescope === "all" ? "all" : "new"}`}
           </button>
+          <a
+            href={`/api/screening/sessions/${sessionId}/roles/${role.id}/export`}
+            className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-100"
+          >
+            Export CSV
+          </a>
         </div>
       </div>
 
@@ -237,53 +243,11 @@ export function RoleCandidateTable({
         <p className="px-5 py-6 text-sm text-stone-400">No candidates uploaded to this session yet.</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-5 py-3">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name…"
-              className="w-full max-w-[220px] rounded-md border border-stone-300 px-3 py-1.5 text-xs focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
-            />
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value as Stage | "")}
-              className="rounded-md border border-stone-300 px-2 py-1.5 text-xs text-stone-700"
-            >
-              <option value="">All stages</option>
-              {STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="rounded-md border border-stone-300 px-2 py-1.5 text-xs text-stone-700"
-            >
-              <option value="">All tags</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1.5 text-xs text-stone-600">
-              <input
-                type="checkbox"
-                checked={minScoreOnly}
-                onChange={(e) => setMinScoreOnly(e.target.checked)}
-                className="accent-amber"
-              />
-              Score ≥ 70
-            </label>
-            {(search || stageFilter || tagFilter || minScoreOnly) && (
-              <span className="text-xs text-stone-400">
-                {rows.length} match{rows.length === 1 ? "" : "es"}
-              </span>
-            )}
-          </div>
+          {(search || stageFilter || tagFilter || minScoreOnly) && (
+            <div className="border-b border-stone-100 px-5 py-2 text-xs text-stone-400">
+              {rows.length} match{rows.length === 1 ? "" : "es"}
+            </div>
+          )}
 
           {selectedIds.size > 0 && (
             <div className="flex flex-wrap items-center gap-3 border-b border-stone-100 bg-amber/10 px-5 py-3">
@@ -321,7 +285,7 @@ export function RoleCandidateTable({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-stone-100 text-xs uppercase text-stone-500">
+                <thead className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50 text-xs uppercase text-stone-500">
                   <tr>
                     <th className="px-4 py-2">
                       <input
@@ -331,13 +295,69 @@ export function RoleCandidateTable({
                         className="accent-amber"
                       />
                     </th>
-                    <th className="px-4 py-2">Name</th>
+                    <th className="px-4 py-2">
+                      <div className="flex flex-col gap-1.5">
+                        Name
+                        <input
+                          type="text"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Search…"
+                          className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
+                        />
+                      </div>
+                    </th>
                     <th className="px-4 py-2">CV</th>
-                    <th className="px-4 py-2">Score</th>
+                    <th className="px-4 py-2">
+                      <div className="flex flex-col gap-1.5">
+                        Score
+                        <label className="flex items-center gap-1 normal-case text-stone-600">
+                          <input
+                            type="checkbox"
+                            checked={minScoreOnly}
+                            onChange={(e) => setMinScoreOnly(e.target.checked)}
+                            className="accent-amber"
+                          />
+                          ≥70
+                        </label>
+                      </div>
+                    </th>
                     <th className="px-4 py-2">Recommended</th>
                     <th className="px-4 py-2">Rationale</th>
-                    <th className="px-4 py-2">Stage</th>
-                    <th className="px-4 py-2">Tags</th>
+                    <th className="px-4 py-2">
+                      <div className="flex flex-col gap-1.5">
+                        Stage
+                        <select
+                          value={stageFilter}
+                          onChange={(e) => setStageFilter(e.target.value as Stage | "")}
+                          className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
+                        >
+                          <option value="">All stages</option>
+                          {STAGES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </th>
+                    <th className="px-4 py-2">
+                      <div className="flex flex-col gap-1.5">
+                        Tags
+                        <select
+                          value={tagFilter}
+                          onChange={(e) => setTagFilter(e.target.value)}
+                          className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
+                        >
+                          <option value="">All tags</option>
+                          {allTags.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </th>
                     <th className="px-4 py-2">Comments</th>
                     <th className="px-4 py-2"></th>
                   </tr>

@@ -171,7 +171,14 @@ export function AdminDashboard() {
   async function runBulkRescore() {
     const targets = applications.filter((a) => selectedIds.has(a.id) && a.role);
     const skipped = selectedIds.size - targets.length;
-    if (targets.length === 0) return;
+    if (targets.length === 0) {
+      setRescoreProgress(
+        skipped > 0
+          ? `Nothing to rescore — all ${skipped} selected application${skipped === 1 ? "" : "s"} need a role assigned first.`
+          : "Nothing selected."
+      );
+      return;
+    }
 
     setRescoring(true);
     let done = 0;

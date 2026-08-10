@@ -2,12 +2,147 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ApplicationRecord, ScreeningDashboard, ScreeningSessionSummary } from "@/lib/types";
+import type {
+  ApplicationRecord,
+  CandidateSearchResult,
+  ScreeningDashboard,
+  ScreeningSessionSummary,
+} from "@/lib/types";
 import { ROLE_LIST } from "@/lib/roles";
 import { runScreeningLoop } from "@/lib/runScreening";
 import { ScoreBadge } from "@/components/shared/ScoreBadge";
 
 const STAGE_BAR_COLOR = "bg-amber";
+
+function CandidateSearchPanel() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<CandidateSearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) {
+      setResults(null);
+      setError(null);
+      return;
+    }
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/screening/candidates/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error("Search failed");
+      const data = await res.json();
+      setResults(data.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function handleClear() {
+    setQuery("");
+    setResults(null);
+    setError(null);
+  }
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">
+        Search candidates by skill, tool or software
+      </h2>
+      <form onSubmit={handleSearch} className="flex flex-wrap gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="e.g. Power BI, dashboard, analytics (comma-separated)"
+          className="min-w-[240px] flex-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
+        />
+        <button
+          type="submit"
+          disabled={searching}
+          className="rounded-md border border-amber bg-amber/10 px-4 py-2 text-sm font-medium text-stone-900 transition hover:bg-amber/20 disabled:opacity-50"
+        >
+          {searching ? "Searching…" : "Search"}
+        </button>
+        {results !== null && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-600 transition hover:bg-stone-100"
+          >
+            Clear
+          </button>
+        )}
+      </form>
+
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+      {results !== null && !error && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs text-stone-400">
+            {results.length} candidate{results.length === 1 ? "" : "s"} across all sessions
+          </p>
+          {results.length === 0 ? (
+            <p className="text-sm text-stone-400">No candidates match these keywords.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {results.map((r) => (
+                <div key={r.candidateId} className="rounded-lg border border-stone-100 bg-stone-50 px-4 py-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-stone-900">{r.candidateName}</span>
+                      <Link
+                        href={`/admin/screening/${r.sessionId}`}
+                        className="text-xs text-amber-dark hover:underline"
+                      >
+                        {r.sessionName}
+                      </Link>
+                    </div>
+                    <a
+                      href={r.cvUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-amber-dark hover:underline"
+                    >
+                      {r.cvFilename}
+                    </a>
+                  </div>
+                  {r.matchedKeywords.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {r.matchedKeywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="rounded-full bg-amber/20 px-2 py-0.5 text-[11px] font-medium text-stone-800"
+                        >
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {r.snippet && <p className="mt-1.5 text-xs text-stone-500">{r.snippet}</p>}
+                  {r.results.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {r.results.map((res, i) => (
+                        <span key={i} className="flex items-center gap-1 text-[11px] text-stone-500">
+                          {res.roleTitle}
+                          <ScoreBadge score={res.aiScore} />
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DashboardPanel({ dashboard }: { dashboard: ScreeningDashboard }) {
   const { totals, stageFunnel, roleBreakdown } = dashboard;
@@ -183,6 +318,8 @@ export function ScreeningHub() {
 
       {!loading && !error && (
         <div className="flex flex-col gap-4">
+          <CandidateSearchPanel />
+
           {dashboard && <DashboardPanel dashboard={dashboard} />}
 
           <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">

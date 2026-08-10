@@ -141,6 +141,18 @@ export interface ScreeningSessionDetail extends ScreeningSession {
   results: ScreeningResult[];
 }
 
+export interface CandidateSearchResult {
+  candidateId: string;
+  candidateName: string;
+  sessionId: string;
+  sessionName: string;
+  cvUrl: string;
+  cvFilename: string;
+  matchedKeywords: string[];
+  snippet: string | null;
+  results: { roleTitle: string; aiScore: number | null; stage: Stage }[];
+}
+
 export interface ScreeningDashboard {
   totals: {
     totalCandidates: number;

@@ -5,4 +5,5 @@ export interface Filters {
   minScoreOnly: boolean;
   tag: string;
   search: string;
+  location: string;
 }

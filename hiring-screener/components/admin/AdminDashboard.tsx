@@ -8,6 +8,7 @@ import { type Filters } from "./FilterBar";
 import { BulkActionBar } from "./BulkActionBar";
 import { ApplicationRow } from "./ApplicationRow";
 import { runClassifyLoop } from "@/lib/classifyUnassigned";
+import { runBackfillLocationLoop } from "@/lib/backfillLocation";
 
 type SortField = "mechanical_score" | "ai_score";
 
@@ -24,6 +25,7 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
     minScoreOnly: false,
     tag: "",
     search: "",
+    location: "",
   });
   const [sortField, setSortField] = useState<SortField>("ai_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -34,6 +36,8 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
   const [rescoreProgress, setRescoreProgress] = useState<string | null>(null);
   const [classifying, setClassifying] = useState(false);
   const [classifyProgress, setClassifyProgress] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<string | null>(null);
 
   useEffect(() => {
     void loadApplications();
@@ -117,6 +121,10 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
     if (filters.source) list = list.filter((a) => a.source === filters.source);
     if (filters.minScoreOnly) list = list.filter((a) => (a.mechanical_score ?? 0) >= 70);
     if (filters.tag) list = list.filter((a) => a.tags.includes(filters.tag));
+    if (filters.location.trim()) {
+      const q = filters.location.trim().toLowerCase();
+      list = list.filter((a) => a.location?.toLowerCase().includes(q));
+    }
     if (filters.search.trim()) {
       const q = filters.search.trim().toLowerCase();
       list = list.filter((a) => a.name.toLowerCase().includes(q));
@@ -248,6 +256,27 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
     setSelectedIds(new Set());
   }
 
+  async function runBackfillLocations() {
+    const targetIds = applications.filter((a) => a.cv_url && !a.location).map((a) => a.id);
+    if (targetIds.length === 0) {
+      setBackfillProgress("Nothing to backfill — every application with a CV already has a location.");
+      return;
+    }
+
+    setBackfilling(true);
+    await runBackfillLocationLoop(targetIds, (update) => {
+      if (update.error) {
+        setBackfillProgress(update.error);
+        return;
+      }
+      setBackfillProgress(
+        `${update.updated + update.skipped + update.failed}/${update.totalCandidates} reviewed — ${update.updated} location${update.updated === 1 ? "" : "s"} found${update.failed ? `, ${update.failed} failed` : ""}.`
+      );
+      if (update.done) void loadApplications();
+    });
+    setBackfilling(false);
+  }
+
   function handleUpdated(updated: ApplicationRecord) {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
@@ -274,6 +303,14 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
             className="rounded-md border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
           >
             {syncing ? "Syncing…" : lockRole ? `Sync LinkedIn — ${ROLES[lockRole].title}` : "Sync LinkedIn"}
+          </button>
+          <button
+            onClick={runBackfillLocations}
+            disabled={backfilling}
+            title="Re-reads each CV that has no location yet and extracts one"
+            className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+          >
+            {backfilling ? "Backfilling…" : "Backfill locations"}
           </button>
           <a
             href="/api/applications/export"
@@ -308,6 +345,7 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
       )}
 
       {syncResult && <p className="mb-4 text-sm text-stone-600">{syncResult}</p>}
+      {backfillProgress && <p className="mb-4 text-sm text-stone-600">{backfillProgress}</p>}
 
       <div className="mb-4 flex items-center gap-3">
         <input
@@ -384,7 +422,18 @@ export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
                   </div>
                 </th>
                 <th className="px-3 py-3">LinkedIn</th>
-                <th className="px-3 py-3">Location</th>
+                <th className="px-3 py-3">
+                  <div className="flex flex-col gap-1.5">
+                    Location
+                    <input
+                      type="text"
+                      value={filters.location}
+                      onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                      placeholder="Filter…"
+                      className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
+                    />
+                  </div>
+                </th>
                 <th className="px-3 py-3">
                   <div className="flex flex-col gap-1.5">
                     Role

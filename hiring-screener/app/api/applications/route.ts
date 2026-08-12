@@ -7,15 +7,20 @@ import { ScoringError, scoreAnswers } from "@/lib/scoring";
 import { runBackgroundScoring } from "@/lib/scoreApplication";
 import { isAdminAuthenticated } from "@/lib/requireAdmin";
 import { extractEmail } from "@/lib/emailExtract";
+import { extractLocationFromCv } from "@/lib/locationExtract";
 import type { ApplicationSubmission } from "@/lib/types";
 
 /**
- * Best-effort: pulls an email from the CV if one was uploaded, else from the free-text
- * answer. Imports the CV-parsing module dynamically (rather than at the top of this file)
- * so that GET /api/applications — the main admin listing, hit far more often than this
- * POST handler — never pays the cost of loading it, and can never be taken down if it fails.
+ * Best-effort: pulls an email and location from the CV if one was uploaded, else falls
+ * back to the free-text answer for email. Imports the CV-parsing module dynamically
+ * (rather than at the top of this file) so that GET /api/applications — the main admin
+ * listing, hit far more often than this POST handler — never pays the cost of loading
+ * it, and can never be taken down if it fails.
  */
-async function resolveEmail(cvUrl: string | undefined, freeText: string): Promise<string | null> {
+async function resolveIdentity(
+  cvUrl: string | undefined,
+  freeText: string
+): Promise<{ email: string | null; location: string | null }> {
   if (cvUrl) {
     try {
       const { extractDocumentText } = await import("@/lib/cvText");
@@ -24,14 +29,15 @@ async function resolveEmail(cvUrl: string | undefined, freeText: string): Promis
         const buffer = Buffer.from(await res.arrayBuffer());
         const filename = new URL(cvUrl).pathname.split("/").pop() ?? "";
         const text = await extractDocumentText(buffer, filename);
-        const email = extractEmail(text);
-        if (email) return email;
+        const email = extractEmail(text) ?? extractEmail(freeText);
+        const location = await extractLocationFromCv(text);
+        return { email, location };
       }
     } catch {
       // fall through to the free-text fallback below
     }
   }
-  return extractEmail(freeText);
+  return { email: extractEmail(freeText), location: null };
 }
 
 export const runtime = "nodejs";
@@ -75,15 +81,15 @@ export async function POST(request: Request) {
   }
 
   const id = randomUUID();
-  const email = await resolveEmail(body.cvUrl, body.freeText.trim());
+  const { email, location } = await resolveIdentity(body.cvUrl, body.freeText.trim());
 
   await ensureSchema();
   await sql`
     INSERT INTO applications (
-      id, role, name, email, linkedin, location_choice, answers, free_text,
+      id, role, name, email, linkedin, location, location_choice, answers, free_text,
       cv_url, cv_filename, mechanical_score, stage
     ) VALUES (
-      ${id}, ${body.role}, ${body.name.trim()}, ${email}, ${body.linkedin ?? null},
+      ${id}, ${body.role}, ${body.name.trim()}, ${email}, ${body.linkedin ?? null}, ${location},
       ${body.role === "engagement_manager" ? body.locationChoice ?? null : null},
       ${JSON.stringify(scored.answers)}, ${body.freeText.trim()},
       ${body.cvUrl ?? null}, ${body.cvFilename ?? null},

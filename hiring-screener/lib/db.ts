@@ -47,6 +47,7 @@ export function ensureSchema(): Promise<void> {
         () => sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'`
       )
       .then(() => sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS email TEXT`)
+      .then(() => sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS location TEXT`)
       .then(
         () => sql`
           CREATE TABLE IF NOT EXISTS linkedin_messages (

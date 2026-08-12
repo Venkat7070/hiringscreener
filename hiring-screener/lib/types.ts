@@ -34,6 +34,7 @@ export interface ApplicationRecord {
   name: string;
   email: string | null;
   linkedin: string | null;
+  location: string | null;
   location_choice: LocationChoice | null;
   answers: AnsweredQuestion[];
   free_text: string | null;

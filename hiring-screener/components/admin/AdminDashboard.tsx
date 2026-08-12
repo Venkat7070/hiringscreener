@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES, type ApplicationRecord, type Stage } from "@/lib/types";
-import { ROLE_LIST } from "@/lib/roles";
+import { ROLE_LIST, ROLES, type Role } from "@/lib/roles";
 import { type Filters } from "./FilterBar";
 import { BulkActionBar } from "./BulkActionBar";
 import { ApplicationRow } from "./ApplicationRow";
@@ -11,14 +11,14 @@ import { runClassifyLoop } from "@/lib/classifyUnassigned";
 
 type SortField = "mechanical_score" | "ai_score";
 
-export function AdminDashboard() {
+export function AdminDashboard({ lockRole }: { lockRole?: Role } = {}) {
   const router = useRouter();
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<Filters>({
-    role: "",
+    role: lockRole ?? "",
     stage: "",
     source: "",
     minScoreOnly: false,
@@ -66,8 +66,9 @@ export function AdminDashboard() {
     let offset = 0;
     const MAX_ROUNDS = 50; // safety cap: 50 * 20 chats/round = 1000 chats
     try {
+      const roleParam = lockRole ? `&role=${lockRole}` : "";
       for (let round = 0; round < MAX_ROUNDS; round++) {
-        const res = await fetch(`/api/linkedin/sync?offset=${offset}`, { method: "POST" });
+        const res = await fetch(`/api/linkedin/sync?offset=${offset}${roleParam}`, { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Sync failed");
 
@@ -263,14 +264,16 @@ export function AdminDashboard() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-stone-950">Applications</h1>
+        <h1 className="text-2xl font-semibold text-stone-950">
+          {lockRole ? `${ROLES[lockRole].title} — LinkedIn Candidates` : "Applications"}
+        </h1>
         <div className="flex items-center gap-3">
           <button
             onClick={handleSyncLinkedIn}
             disabled={syncing}
             className="rounded-md border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-50"
           >
-            {syncing ? "Syncing…" : "Sync LinkedIn"}
+            {syncing ? "Syncing…" : lockRole ? `Sync LinkedIn — ${ROLES[lockRole].title}` : "Sync LinkedIn"}
           </button>
           <a
             href="/api/applications/export"
@@ -381,21 +384,26 @@ export function AdminDashboard() {
                   </div>
                 </th>
                 <th className="px-3 py-3">LinkedIn</th>
+                <th className="px-3 py-3">Location</th>
                 <th className="px-3 py-3">
                   <div className="flex flex-col gap-1.5">
                     Role
-                    <select
-                      value={filters.role}
-                      onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                      className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
-                    >
-                      <option value="">All roles</option>
-                      {ROLE_LIST.map((r) => (
-                        <option key={r.key} value={r.key}>
-                          {r.title}
-                        </option>
-                      ))}
-                    </select>
+                    {lockRole ? (
+                      <span className="text-[11px] normal-case text-stone-500">{ROLES[lockRole].title}</span>
+                    ) : (
+                      <select
+                        value={filters.role}
+                        onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                        className="w-full rounded-md border border-stone-300 px-1.5 py-1 text-[11px] normal-case text-stone-700"
+                      >
+                        <option value="">All roles</option>
+                        {ROLE_LIST.map((r) => (
+                          <option key={r.key} value={r.key}>
+                            {r.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </th>
                 <th className="px-3 py-3">
@@ -471,7 +479,7 @@ export function AdminDashboard() {
               ))}
               {filteredSorted.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-stone-400">
+                  <td colSpan={12} className="px-3 py-8 text-center text-stone-400">
                     No applications match these filters.
                   </td>
                 </tr>

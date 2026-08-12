@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import { extractEmail } from "@/lib/emailExtract";
+import { extractLocationFromCv } from "@/lib/locationExtract";
+import type { Role } from "@/lib/roles";
 
 // Hard rule: never sync anything from before this date, and never sync a chat
 // that has never had a CV attachment (i.e. isn't a candidate conversation).
@@ -71,8 +73,9 @@ export async function ingestCvAttachment(params: {
   senderName: string;
   senderProfileUrl: string | null;
   messageText: string | null;
+  role?: Role | null;
 }): Promise<{ inserted: boolean }> {
-  const { messageId, attachment, senderName, senderProfileUrl, messageText } = params;
+  const { messageId, attachment, senderName, senderProfileUrl, messageText, role = null } = params;
   const externalId = `${messageId}:${attachment.id}`;
 
   const { buffer, contentType } = await fetchAttachmentBinary(messageId, attachment.id);
@@ -92,14 +95,15 @@ export async function ingestCvAttachment(params: {
     // fall back to the accompanying message text below
   }
   const email = extractEmail(cvText) ?? extractEmail(messageText);
+  const location = cvText ? await extractLocationFromCv(cvText) : null;
 
   const id = randomUUID();
   const { rowCount } = await sql`
     INSERT INTO applications (
-      id, role, name, email, linkedin, answers, free_text,
+      id, role, name, email, linkedin, location, answers, free_text,
       cv_url, cv_filename, mechanical_score, stage, source, external_id
     ) VALUES (
-      ${id}, NULL, ${senderName}, ${email}, ${senderProfileUrl}, '[]'::jsonb, ${messageText},
+      ${id}, ${role}, ${senderName}, ${email}, ${senderProfileUrl}, ${location}, '[]'::jsonb, ${messageText},
       ${blob.url}, ${`${senderName} - CV.${ext}`}, NULL, 'Applied', 'linkedin', ${externalId}
     )
     ON CONFLICT (external_id) DO NOTHING

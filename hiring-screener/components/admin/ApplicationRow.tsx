@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ROLE_LIST, type Role } from "@/lib/roles";
 import { type ApplicationRecord, type Stage } from "@/lib/types";
 import { ScoreBadge } from "@/components/shared/ScoreBadge";
@@ -25,6 +25,11 @@ export function ApplicationRow({
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rescoreError, setRescoreError] = useState<string | null>(null);
+  const [locationDraft, setLocationDraft] = useState(application.location ?? "");
+
+  useEffect(() => {
+    setLocationDraft(application.location ?? "");
+  }, [application.location]);
 
   async function updateTags(tags: string[]) {
     setBusy(true);
@@ -67,6 +72,25 @@ export function ApplicationRow({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onUpdated(data.application);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function commitLocation() {
+    const trimmed = locationDraft.trim();
+    if (trimmed === (application.location ?? "")) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/applications/${application.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location: trimmed || null }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -134,6 +158,24 @@ export function ApplicationRow({
           )}
         </td>
         <td className="px-3 py-3 text-stone-700">
+          <input
+            type="text"
+            value={locationDraft}
+            disabled={busy}
+            onChange={(e) => setLocationDraft(e.target.value)}
+            onBlur={commitLocation}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="—"
+            title="Extracted from CV — edit if wrong"
+            className="w-28 rounded-md border border-stone-300 px-2 py-1 text-xs"
+          />
+        </td>
+        <td className="px-3 py-3 text-stone-700">
           <select
             value={application.role ?? ""}
             disabled={busy}
@@ -184,7 +226,7 @@ export function ApplicationRow({
 
       {expanded && (
         <tr className="border-b border-stone-100 bg-stone-50 text-sm">
-          <td colSpan={11} className="px-6 py-5">
+          <td colSpan={12} className="px-6 py-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-stone-200 bg-white p-4">
                 {application.answers.length > 0 ? (

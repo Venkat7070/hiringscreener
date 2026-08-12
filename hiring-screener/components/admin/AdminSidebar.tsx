@@ -65,6 +65,23 @@ export function AdminSidebar() {
             ))}
           </div>
         </div>
+
+        <div>
+          <div className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
+            LinkedIn
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <NavLink
+              href="/admin/linkedin/engagement-manager"
+              active={pathname === "/admin/linkedin/engagement-manager"}
+            >
+              Engagement Manager sync
+            </NavLink>
+            <NavLink href="/admin/linkedin" active={pathname === "/admin/linkedin"}>
+              All LinkedIn chats
+            </NavLink>
+          </div>
+        </div>
       </nav>
 
       <button

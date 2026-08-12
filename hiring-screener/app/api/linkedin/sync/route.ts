@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureSchema } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/requireAdmin";
+import { isValidRole, type Role } from "@/lib/roles";
 import {
   ingestCvAttachment,
   ingestMessage,
@@ -60,7 +61,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const offset = Math.max(0, Number(new URL(request.url).searchParams.get("offset") ?? "0") || 0);
+  const params = new URL(request.url).searchParams;
+  const offset = Math.max(0, Number(params.get("offset") ?? "0") || 0);
+
+  const roleParam = params.get("role");
+  if (roleParam && !isValidRole(roleParam)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+  const role: Role | null = roleParam as Role | null;
 
   await ensureSchema();
 
@@ -182,6 +190,7 @@ export async function POST(request: Request) {
             senderName: contactName,
             senderProfileUrl: contactProfileUrl,
             messageText: message.text ?? null,
+            role,
           });
           if (inserted) ingested++;
         } catch (error) {
